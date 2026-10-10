@@ -1,9 +1,10 @@
 #include <iostream>
 #include <raylib.h>
+#include "button.hpp"
 
 using namespace std;
 
-int player_score = 0;
+int player_score = 49;
 int cpu_score = 0;
 
 class Ball{
@@ -28,21 +29,20 @@ public:
         // }
         if(x + radius >= GetScreenWidth()){ //cpu wins
             cpu_score++;
-            ResetBall();
+            ResetBall(-1);
         }
         if(x - radius <= 0){ //player wins
             player_score++;
-            ResetBall();
+            ResetBall(1);
         }
     }
 
-    void ResetBall(){
+    void ResetBall(int directionX){
         x = GetScreenWidth() / 2;
         y = GetScreenHeight() / 2;
 
-        int speed_choices[2] = {-1,1};
-        speedX *= speed_choices[GetRandomValue(0,1)];
-        speedY *= speed_choices[GetRandomValue(0,1)];
+        speedX = 7 * directionX;
+        speedY = 7 * (GetRandomValue(0,1));
     }
 };
 
@@ -96,12 +96,44 @@ Ball ball;
 Paddle player;
 CpuPaddle cpu;
 
+void RestartGame(){
+    // Reset score
+    player_score = 0;
+    cpu_score = 0;
+
+    // Reset ball
+    ball.x = GetScreenWidth() / 2.0f;
+    ball.y = GetScreenHeight() / 2.0f;
+    ball.speedX = 7;
+    ball.speedY = 7;
+
+    // Reset player paddle
+    player.y = GetScreenHeight() / 2.0f - player.height / 2.0f;
+
+    // Reset CPU paddle
+    cpu.y = GetScreenHeight() / 2.0f - cpu.height / 2.0f;
+}
+
+enum GameScreen {
+    Menu,
+    Gameplay,
+    Gameover,
+    Win
+};
+
+
 int main(){
     // Window
     const int width = 1280;
     const int height = 720;
     InitWindow(width, height, "Pong games");
     SetTargetFPS(60);
+
+    GameScreen currentscene = Menu;
+
+    Button startButton{"Graphics/start.png", {580, 320}, 2.0};
+    Button exitButton{"Graphics/quit.png", {580, 400}, 2.0};
+    bool exit = false;
 
     ball.radius = 20;
     ball.x = width / 2;
@@ -121,34 +153,77 @@ int main(){
     cpu.y = height / 2 - player.height / 2;
     cpu.speed = 6;
 
-    while(WindowShouldClose() == false) {
+    while(WindowShouldClose() == false && exit == false) {
+        Vector2 mouseposition = GetMousePosition();
+        bool mousePressed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+
+        if(currentscene == Menu){
+            if(startButton.IsPressed(mouseposition, mousePressed)){
+                currentscene = Gameplay;
+            }
+            if(exitButton.IsPressed(mouseposition, mousePressed)){
+                exit = true;
+            }
+        }
+
+        if(currentscene == Win || currentscene == Gameover){
+            if(IsKeyPressed(KEY_R)){
+                RestartGame();
+                currentscene = Gameplay;
+            }
+        }
+
         BeginDrawing();
+        ClearBackground(BLACK);
 
-        // updating
-        ball.Update();
-        player.Update();
-        cpu.Update(ball.y);
 
-        // check collision
-        if(CheckCollisionCircleRec(Vector2{ball.x, ball.y}, ball.radius, Rectangle{player.x, player.y, player.width, player.height})) {
-            ball.speedX *= -1;
+        if(currentscene == Menu){
+            DrawText("Pong 100", width / 2 - 150, height / 2 - 150, 80, WHITE);
+            startButton.Draw();
+            exitButton.Draw();
+        }
+        else if(currentscene == Gameplay){
+            // updating
+            ball.Update();
+            player.Update();
+            cpu.Update(ball.y);
+
+            if(player_score >= 50){
+                currentscene = Win;
+            } else if(cpu_score >= 50){
+                currentscene = Gameover;
+            }
+
+            // check collision
+            if(CheckCollisionCircleRec(Vector2{ball.x, ball.y}, ball.radius, Rectangle{player.x, player.y, player.width, player.height})) {
+                ball.speedX *= -1;
+            }
+
+            if(CheckCollisionCircleRec(Vector2{ball.x, ball.y}, ball.radius, Rectangle{cpu.x, cpu.y, cpu.width, cpu.height})) {
+                ball.speedX *= -1;
+            }
+
+            // Drawing
+            // DrawRectangle(width /2, 0, width /2, height, BLACK);
+            // DrawCircle(width /2, height/2, 150, WHITE);
+            DrawLine(width/2.0, 0, width/2, height, WHITE);
+        
+            ball.Draw();
+            cpu.Draw();
+            player.Draw();
+            DrawText(TextFormat("%i", cpu_score), width/4 - 20, 20, 80, WHITE);
+            DrawText(TextFormat("%i", player_score), 3 * width/4 - 20, 20, 80, WHITE);
+
+        }
+        else if(currentscene == Win){
+            DrawText("You win", width /2 - 160, height / 2 - 40, 60, WHITE);
+            DrawText("Press R to Restart", width / 2 - 150, height / 2 + 40, 30, WHITE);
+        }
+        else if(currentscene == Gameover)
+        {
+            DrawText("Press R to Restart", width / 2 - 160, height / 2 + 40, 30, WHITE);
         }
 
-        if(CheckCollisionCircleRec(Vector2{ball.x, ball.y}, ball.radius, Rectangle{cpu.x, cpu.y, cpu.width, cpu.height})) {
-            ball.speedX *= -1;
-        }
-
-
-        // Drawing
-        ClearBackground(WHITE);
-        DrawRectangle(width /2, 0, width /2, height, WHITE);
-        DrawCircle(width /2, height/2, 150, WHITE);
-        DrawLine(width/2.0, 0, width/2, height, WHITE);
-        ball.Draw();
-        cpu.Draw();
-        player.Draw();
-        DrawText(TextFormat("%i", cpu_score), width/4 - 20, 20, 80, WHITE);
-        DrawText(TextFormat("%i", player_score), 3 * width/4 - 20, 20, 80, WHITE);
 
         EndDrawing();
     }
